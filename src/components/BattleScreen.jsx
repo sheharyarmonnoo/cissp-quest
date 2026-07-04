@@ -4,6 +4,7 @@ import { EnemyDisplay } from './EnemyDisplay';
 import { StreakBanner } from './StreakBanner';
 import { useTimer } from '../hooks/useTimer';
 import { VsSplash, FloatingRewards, LevelUpBurst } from './FX';
+import { CinematicStage, isCinematicEnabled, toggleCinematic } from './CinematicStage';
 import { sfx } from '../lib/sfx';
 import { getHeroTier } from '../lib/hero';
 import { ZONES } from '../data/zones';
@@ -13,32 +14,45 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
   const [showVs, setShowVs] = useState(true);
   const [shake, setShake] = useState(false);
   const [levelUp, setLevelUp] = useState(null);
+  const [cinematic, setCinematic] = useState(isCinematicEnabled());
+  const [cinStage, setCinStage] = useState('intro');
   const prevLevel = useRef(state.level);
   const question = questions[state.currentQuestion];
   const progress = ((state.currentQuestion + 1) / questions.length) * 100;
   const isBoss = state.gamePhase === 'finalBoss';
   const isDaily = state.currentZone === 'daily-challenge';
+  const useCinematic = cinematic && !isDaily;
+  const clipPlaying = useCinematic && cinStage !== 'idle';
 
   // Battle intro splash + sound, re-shown whenever a new battle starts
   useEffect(() => {
     setShowVs(true);
+    setCinStage('intro');
     if (isBoss) sfx.bossIntro();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.currentZone]);
 
-  // React to each answer: sound, shake, floating numbers
+  // React to each answer: sound, shake, floating numbers, cinematic branch
   useEffect(() => {
     if (!state.lastAnswer) return;
     if (state.lastAnswer.isCorrect) {
       sfx.correct();
+      if (useCinematic) {
+        const isLastQuestion = state.currentQuestion + 1 >= questions.length;
+        setCinStage(isLastQuestion ? 'victory' : 'strike');
+      }
     } else if (state.lastAnswer.shieldBlocked) {
       sfx.shield();
     } else {
       sfx.wrong();
+      if (useCinematic) {
+        setCinStage(state.hp <= 0 ? 'defeat' : 'hit');
+      }
       setShake(true);
       const t = setTimeout(() => setShake(false), 500);
       return () => clearTimeout(t);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.lastAnswer]);
 
   // Level-up fanfare
@@ -61,9 +75,9 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
   }, [state.showExplanation, selectedOption, question, onAnswer]);
 
   const timer = useTimer({
-    enabled: state.timerMode && !state.showExplanation,
+    enabled: state.timerMode && !state.showExplanation && !clipPlaying,
     onTimeout: handleTimeout,
-    paused: state.showExplanation,
+    paused: state.showExplanation || clipPlaying,
   });
 
   useEffect(() => {
@@ -113,7 +127,14 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
 
   return (
     <div className={`battle-screen ${isBoss ? 'boss-battle' : ''} ${shake ? 'screen-shake' : ''}`}>
-      {arenaDomain && (
+      {useCinematic && (
+        <CinematicStage
+          stage={cinStage}
+          onClipEnd={() => setCinStage('idle')}
+          onError={() => setCinematic(false)}
+        />
+      )}
+      {!useCinematic && arenaDomain && (
         <div
           className="battle-arena-bg"
           style={{ backgroundImage: `url(/arenas/d${arenaDomain}.webp)` }}
@@ -147,6 +168,16 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
         <div className="battle-diff">
           {'⭐'.repeat(question.difficulty)}
         </div>
+        {!isDaily && (
+          <button
+            className="btn btn-retreat btn-cinematic-toggle"
+            style={{ opacity: cinematic ? 1 : 0.4 }}
+            onClick={() => { setCinematic(toggleCinematic()); setCinStage('idle'); }}
+            title={cinematic ? 'Cinematic battles ON' : 'Cinematic battles OFF'}
+          >
+            🎬
+          </button>
+        )}
       </div>
 
       {isBoss && (
@@ -164,7 +195,7 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
         />
       )}
 
-      {state.timerMode && !state.showExplanation && (
+      {state.timerMode && !state.showExplanation && !clipPlaying && (
         <div className={`timer-bar ${timer.urgent ? 'timer-urgent' : ''}`}>
           <div
             className="timer-fill"
@@ -177,7 +208,7 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
       <StreakBanner streak={state.streak} />
 
       {/* Item Toolbar */}
-      {!state.showExplanation && (
+      {!state.showExplanation && !clipPlaying && (
         <div className="item-toolbar">
           {Object.values(ITEMS).filter(item => item.usableInBattle).map(item => {
             const qty = state.inventory[item.id] || 0;
@@ -204,11 +235,12 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
         </div>
       )}
 
-      {state.hintText && !state.showExplanation && (
+      {state.hintText && !state.showExplanation && !clipPlaying && (
         <div className="hint-banner">📜 Hint: {state.hintText}</div>
       )}
 
-      <div className="question-card">
+      {!clipPlaying && (
+      <div className={`question-card ${useCinematic ? 'question-card-pop' : ''}`}>
         <div className="question-text">{question.question}</div>
 
         <div className="options-grid">
@@ -231,9 +263,10 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
           ))}
         </div>
       </div>
+      )}
 
       {/* Bottom Sheet Dialog for Answer Explanation */}
-      {state.showExplanation && (
+      {state.showExplanation && !clipPlaying && (
         <>
           <div className="answer-overlay" onClick={onNext} />
           <div className={`answer-sheet ${state.lastAnswer?.isCorrect ? 'answer-correct' : 'answer-incorrect'}`}>
