@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <rect width="192" height="192" rx="32" fill="#0f0f1a"/>
+  <rect x="8" y="8" width="176" height="176" rx="28" fill="#1a1a2e" stroke="#7c3aed" stroke-width="4"/>
+  <text x="96" y="80" text-anchor="middle" font-size="40" fill="#7c3aed" font-family="sans-serif" font-weight="bold">CISSP</text>
+  <text x="96" y="130" text-anchor="middle" font-size="36" fill="#a78bfa" font-family="sans-serif" font-weight="bold">QUEST</text>
+  <text x="96" y="165" text-anchor="middle" font-size="28">⚔️</text>
+</svg>
