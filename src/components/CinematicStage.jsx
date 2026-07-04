@@ -1,15 +1,51 @@
 import { useEffect, useRef } from 'react';
 
-// Fullscreen FMV battle stage. Plays a clip per battle beat, then freezes on
-// the final frame so the question UI overlays the paused footage.
+// FMV battle engine. Each battle beat picks a random clip from a pool so no
+// two answers play out the same. Fights escalate into Act 2 (wounded enemy,
+// cracked arena) past the halfway point, and the final boss has its own set.
 
-const CLIPS = {
-  intro: '/cinematic/intro.mp4',
-  strike: '/cinematic/strike.mp4',
-  hit: '/cinematic/hit.mp4',
-  victory: '/cinematic/victory.mp4',
-  defeat: '/cinematic/defeat.mp4',
+export const CLIP_SETS = {
+  generic: {
+    poster: '/cinematic/faceoff.webp',
+    intro: ['/cinematic/intro.mp4'],
+    strike1: ['/cinematic/strike.mp4', '/cinematic/strike-b.mp4', '/cinematic/strike-c.mp4'],
+    strike2: ['/cinematic/strike2-a.mp4', '/cinematic/strike2-b.mp4'],
+    hit1: ['/cinematic/hit.mp4', '/cinematic/hit-b.mp4', '/cinematic/hit-c.mp4'],
+    hit2: ['/cinematic/hit2-a.mp4', '/cinematic/hit2-b.mp4'],
+    victory: ['/cinematic/victory.mp4'],
+    defeat: ['/cinematic/defeat.mp4'],
+  },
+  hydra: {
+    poster: '/cinematic/hydra/faceoff.webp',
+    intro: ['/cinematic/hydra/intro.mp4'],
+    strike1: ['/cinematic/hydra/strike-a.mp4', '/cinematic/hydra/strike-b.mp4'],
+    strike2: ['/cinematic/hydra/strike-a.mp4', '/cinematic/hydra/strike-b.mp4'],
+    hit1: ['/cinematic/hydra/hit-a.mp4', '/cinematic/hydra/hit-b.mp4'],
+    hit2: ['/cinematic/hydra/hit-a.mp4', '/cinematic/hydra/hit-b.mp4'],
+    victory: ['/cinematic/hydra/victory.mp4'],
+    defeat: ['/cinematic/hydra/defeat.mp4'],
+  },
 };
+
+// beat: 'intro' | 'strike' | 'hit' | 'victory' | 'defeat'
+// act: 1 (fresh fight) or 2 (past halfway - escalated clips)
+// avoidUrl: last clip played, so consecutive answers never repeat footage
+export function pickClip(setId, beat, act, avoidUrl) {
+  const set = CLIP_SETS[setId] || CLIP_SETS.generic;
+  let pool;
+  if (beat === 'strike') {
+    pool = act >= 2 && set.strike2?.length ? set.strike2 : set.strike1;
+  } else if (beat === 'hit') {
+    pool = act >= 2 && set.hit2?.length ? set.hit2 : set.hit1;
+  } else {
+    pool = set[beat] || [];
+  }
+  if (!pool || pool.length === 0) return null;
+  const candidates = pool.length > 1 && avoidUrl
+    ? pool.filter(u => u !== avoidUrl)
+    : pool;
+  return candidates[Math.floor(Math.random() * candidates.length)];
+}
 
 let cinematicPref = true;
 try {
@@ -31,41 +67,31 @@ export function toggleCinematic() {
   return isCinematicEnabled();
 }
 
-export function CinematicStage({ stage, onClipEnd, onError }) {
+// clip: { url, id } - id bumps every pick so the same file can replay.
+// clip === null freezes the video on its current frame (question time).
+export function CinematicStage({ clip, poster, onClipEnd, onError }) {
   const videoRef = useRef(null);
-  const lastClipRef = useRef(null);
 
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    if (stage === 'idle') return; // freeze on current frame
-
-    const src = CLIPS[stage];
-    if (!src || lastClipRef.current === stage) return;
-    lastClipRef.current = stage;
-
-    v.src = src;
+    if (!v || !clip?.url) return;
+    v.src = clip.url;
     v.currentTime = 0;
     const p = v.play();
     if (p && p.catch) {
       p.catch(() => {
-        // Autoplay refused or file missing - bail out of cinematic mode
         if (onError) onError();
       });
     }
-  }, [stage, onError]);
-
-  // Allow re-entering the same stage later (e.g. two 'hit' clips in a row)
-  useEffect(() => {
-    if (stage === 'idle') lastClipRef.current = null;
-  }, [stage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.id]);
 
   return (
     <div className="cinematic-stage" aria-hidden="true">
       <video
         ref={videoRef}
         className="cinematic-video"
-        poster="/cinematic/faceoff.webp"
+        poster={poster}
         preload="auto"
         muted
         playsInline

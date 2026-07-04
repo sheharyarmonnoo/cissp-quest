@@ -4,7 +4,7 @@ import { EnemyDisplay } from './EnemyDisplay';
 import { StreakBanner } from './StreakBanner';
 import { useTimer } from '../hooks/useTimer';
 import { VsSplash, FloatingRewards, LevelUpBurst } from './FX';
-import { CinematicStage, isCinematicEnabled, toggleCinematic } from './CinematicStage';
+import { CinematicStage, CLIP_SETS, pickClip, isCinematicEnabled, toggleCinematic } from './CinematicStage';
 import { sfx } from '../lib/sfx';
 import { getHeroTier } from '../lib/hero';
 import { ZONES } from '../data/zones';
@@ -15,38 +15,58 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
   const [shake, setShake] = useState(false);
   const [levelUp, setLevelUp] = useState(null);
   const [cinematic, setCinematic] = useState(isCinematicEnabled());
-  const [cinStage, setCinStage] = useState('intro');
+  const [cinClip, setCinClip] = useState(null);
+  const clipCounter = useRef(0);
+  const lastClipUrl = useRef(null);
   const prevLevel = useRef(state.level);
   const question = questions[state.currentQuestion];
   const progress = ((state.currentQuestion + 1) / questions.length) * 100;
   const isBoss = state.gamePhase === 'finalBoss';
   const isDaily = state.currentZone === 'daily-challenge';
   const useCinematic = cinematic && !isDaily;
-  const clipPlaying = useCinematic && cinStage !== 'idle';
+  const clipPlaying = useCinematic && cinClip !== null;
+  const clipSet = isBoss ? 'hydra' : 'generic';
+
+  const playBeat = (beat, act = 1) => {
+    const url = pickClip(clipSet, beat, act, lastClipUrl.current);
+    if (!url) return;
+    lastClipUrl.current = url;
+    clipCounter.current += 1;
+    setCinClip({ url, id: clipCounter.current });
+  };
 
   // Battle intro splash + sound, re-shown whenever a new battle starts
   useEffect(() => {
     setShowVs(true);
-    setCinStage('intro');
+    lastClipUrl.current = null;
+    if (cinematic && state.currentZone !== 'daily-challenge') {
+      const url = pickClip(state.currentZone === 'final-boss' ? 'hydra' : 'generic', 'intro', 1, null);
+      clipCounter.current += 1;
+      setCinClip(url ? { url, id: clipCounter.current } : null);
+    } else {
+      setCinClip(null);
+    }
     if (isBoss) sfx.bossIntro();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.currentZone]);
 
-  // React to each answer: sound, shake, floating numbers, cinematic branch
+  // React to each answer: sound, shake, floating numbers, cinematic branch.
+  // Fights escalate to Act 2 footage past the halfway point.
   useEffect(() => {
     if (!state.lastAnswer) return;
+    const act = (state.currentQuestion + 1) / questions.length > 0.5 ? 2 : 1;
     if (state.lastAnswer.isCorrect) {
       sfx.correct();
       if (useCinematic) {
         const isLastQuestion = state.currentQuestion + 1 >= questions.length;
-        setCinStage(isLastQuestion ? 'victory' : 'strike');
+        playBeat(isLastQuestion ? 'victory' : 'strike', act);
       }
     } else if (state.lastAnswer.shieldBlocked) {
       sfx.shield();
     } else {
       sfx.wrong();
       if (useCinematic) {
-        setCinStage(state.hp <= 0 ? 'defeat' : 'hit');
+        playBeat(state.hp <= 0 ? 'defeat' : 'hit', act);
       }
       setShake(true);
       const t = setTimeout(() => setShake(false), 500);
@@ -129,8 +149,9 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
     <div className={`battle-screen ${isBoss ? 'boss-battle' : ''} ${shake ? 'screen-shake' : ''}`}>
       {useCinematic && (
         <CinematicStage
-          stage={cinStage}
-          onClipEnd={() => setCinStage('idle')}
+          clip={cinClip}
+          poster={CLIP_SETS[clipSet].poster}
+          onClipEnd={() => setCinClip(null)}
           onError={() => setCinematic(false)}
         />
       )}
@@ -172,7 +193,7 @@ export function BattleScreen({ state, questions, currentZone, onAnswer, onNext, 
           <button
             className="btn btn-retreat btn-cinematic-toggle"
             style={{ opacity: cinematic ? 1 : 0.4 }}
-            onClick={() => { setCinematic(toggleCinematic()); setCinStage('idle'); }}
+            onClick={() => { setCinematic(toggleCinematic()); setCinClip(null); }}
             title={cinematic ? 'Cinematic battles ON' : 'Cinematic battles OFF'}
           >
             🎬
