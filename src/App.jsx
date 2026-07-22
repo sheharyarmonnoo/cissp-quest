@@ -55,6 +55,8 @@ function App() {
               onOpenShop={() => setShowShop(true)}
               timerMode={state.timerMode}
               onToggleTimer={game.toggleTimerMode}
+              testMode={state.testModeUnlockAll}
+              onToggleTestMode={game.toggleTestMode}
               dailyChallengeDate={state.dailyChallengeDate}
               dailyChallengeCompleted={state.dailyChallengeCompleted}
               dailyChallengeScore={state.dailyChallengeScore}

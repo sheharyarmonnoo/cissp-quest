@@ -11,7 +11,7 @@ export function WorldMap({
   zones, finalBoss, onEnterZone, onEnterFinalBoss,
   onOpenShop, timerMode, onToggleTimer,
   dailyChallengeDate, dailyChallengeCompleted, dailyChallengeScore,
-  onEnterDailyChallenge,
+  onEnterDailyChallenge, testMode, onToggleTestMode,
 }) {
   const todayStr = getDailyChallengeDate();
   const dailyDone = dailyChallengeCompleted && dailyChallengeDate === todayStr;
@@ -46,6 +46,10 @@ export function WorldMap({
         <label className="timer-toggle">
           <input type="checkbox" checked={timerMode} onChange={onToggleTimer} />
           <span className="timer-toggle-label">⏱️ Timer Mode {timerMode ? 'ON' : 'OFF'}</span>
+        </label>
+        <label className="timer-toggle test-mode-toggle">
+          <input type="checkbox" checked={testMode} onChange={onToggleTestMode} />
+          <span className="timer-toggle-label">🧪 Test Mode (unlock all) {testMode ? 'ON' : 'OFF'}</span>
         </label>
       </div>
 

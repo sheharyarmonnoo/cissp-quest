@@ -39,6 +39,7 @@ const INITIAL_STATE = {
   secondChanceUsed: false,
   eliminatedOptions: [],
   hintText: null,
+  testModeUnlockAll: false,
 };
 
 // Sync load from localStorage as fallback for initial render
@@ -102,18 +103,18 @@ export function useGameState() {
   const getZones = useCallback(() => {
     return ZONES.map((zone, i) => ({
       ...zone,
-      unlocked: CHAPTER_STARTS.has(i) || state.zonesCompleted.includes(ZONES[i - 1].id),
+      unlocked: state.testModeUnlockAll || CHAPTER_STARTS.has(i) || state.zonesCompleted.includes(ZONES[i - 1].id),
       completed: state.zonesCompleted.includes(zone.id),
       score: state.zoneScores[zone.id] || null,
       bestGrade: state.zoneBestGrades[zone.id] || null,
     }));
-  }, [state.zonesCompleted, state.zoneScores, state.zoneBestGrades]);
+  }, [state.zonesCompleted, state.zoneScores, state.zoneBestGrades, state.testModeUnlockAll]);
 
   const getFinalBoss = useCallback(() => ({
     ...FINAL_BOSS,
-    unlocked: state.zonesCompleted.length === ZONES.length,
+    unlocked: state.testModeUnlockAll || state.zonesCompleted.length === ZONES.length,
     completed: state.bossDefeated,
-  }), [state.zonesCompleted, state.bossDefeated]);
+  }), [state.zonesCompleted, state.bossDefeated, state.testModeUnlockAll]);
 
   const getCurrentZone = useCallback(() => {
     if (state.currentZone === 'final-boss') return FINAL_BOSS;
@@ -505,6 +506,10 @@ export function useGameState() {
     updateState(prev => ({ ...prev, timerMode: !prev.timerMode }));
   }, [updateState]);
 
+  const toggleTestMode = useCallback(() => {
+    updateState(prev => ({ ...prev, testModeUnlockAll: !prev.testModeUnlockAll }));
+  }, [updateState]);
+
   const resetGame = useCallback(() => {
     clearStateFromDB();
     setState({ ...INITIAL_STATE });
@@ -529,5 +534,6 @@ export function useGameState() {
     useItem,
     useAbility,
     toggleTimerMode,
+    toggleTestMode,
   };
 }
